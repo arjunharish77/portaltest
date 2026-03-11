@@ -13,14 +13,30 @@ export const BasicDetailsSchema = z.object({
     nationality: z.string().min(1, 'Nationality is required'),
 })
 
-export const EducationWorkDetailsSchema = z.object({
+// Matches actual application_education_work_details table columns
+export const EducationWorkSchema = z.object({
     highest_qualification: z.string().min(1, 'Highest qualification is required'),
     institution_name: z.string().min(1, 'Institution name is required'),
     specialization: z.string().min(1, 'Specialization is required'),
-    graduation_year: z.string().regex(/^\d{4}$/, 'Valid graduation year required'),
-    percentage_or_cgpa: z.string().min(1, 'Percentage or CGPA is required'),
+    graduation_year: z.string().regex(/^\d{4}$/, 'Enter a valid 4-digit year'),
+    percentage_or_cgpa: z.string().min(1, 'Percentage / CGPA is required'),
     is_work_experience: z.boolean(),
     work_experience_years: z.string().optional(),
     current_company: z.string().optional(),
     current_designation: z.string().optional(),
+})
+
+export const AdmissionFeeSchema = z.object({
+    plan: z.enum(['semester', 'annual', 'full_course'] as const, {
+        message: 'Invalid plan',
+    }),
+})
+
+export const DocumentUploadSchema = z.object({
+    documents: z.array(
+        z.object({
+            document_type: z.string().min(1),
+            file_name: z.string().min(1),
+        })
+    ).optional(),
 })

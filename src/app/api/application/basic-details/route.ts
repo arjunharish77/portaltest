@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getAuthUser } from '@/lib/auth/guard'
 import { errorResponse, successResponse } from '@/lib/utils/api-response'
 import { BasicDetailsSchema } from '@/lib/validations/application'
-import type { Application, ApplicationBasicDetails } from '@/types/db'
+import type { Application } from '@/types/db'
 
 export async function GET(req: NextRequest) {
     try {
@@ -11,28 +11,29 @@ export async function GET(req: NextRequest) {
 
         const { data: app } = await supabaseAdmin
             .from('applications')
-            .select('id, application_number')
+            .select('id, application_number, current_step, basic_details_status, application_fee_status')
             .eq('user_id', user.id)
             .single()
 
-        if (!app) return successResponse({ details: null })
-
-        const typedApp = app as Application
+        if (!app) return successResponse({ details: null, user: null })
 
         const { data: details } = await supabaseAdmin
             .from('application_basic_details')
             .select('*')
-            .eq('application_id', typedApp.id)
+            .eq('application_id', app.id)
             .single()
 
         return successResponse({
-            details: details as ApplicationBasicDetails | null,
+            details: details ?? null,
             user: {
                 full_name: user.full_name,
                 email: user.email,
                 phone: user.phone,
                 course_name: user.course_name,
-                application_number: typedApp.application_number
+                application_number: app.application_number,
+                current_step: app.current_step,
+                basic_details_status: app.basic_details_status,
+                application_fee_status: app.application_fee_status,
             }
         })
     } catch {
@@ -45,97 +46,71 @@ export async function POST(req: NextRequest) {
         const { user } = await getAuthUser(req)
 
         const body = await req.json()
-        console.log('[DEBUG basic-details] received payload:', body)
-
         const parsed = BasicDetailsSchema.safeParse(body)
         if (!parsed.success) {
             const firstError = parsed.error.issues[0]
-            console.error('[DEBUG basic-details] validation failed:', parsed.error.flatten().fieldErrors)
             return errorResponse(firstError?.message ?? 'Validation failed', 400, {
                 validation_errors: parsed.error.flatten().fieldErrors,
             })
         }
 
-        console.log(`[DEBUG basic-details] resolved user_id: ${user.id}`)
-
-        // Get application
-        let { data: app, error: appError } = await supabaseAdmin
+        const { data: app, error: appError } = await supabaseAdmin
             .from('applications')
             .select('id')
             .eq('user_id', user.id)
             .single()
 
-        if (appError) {
-            console.error('[DEBUG basic-details] app fetch error:', appError)
-        }
-
-        if (!app) {
-            console.error('[DEBUG basic-details] Application not found for user', user.id)
-            return errorResponse('Application not found. Please contact support.', 404)
+        if (appError || !app) {
+            return errorResponse('Application not found', 404)
         }
 
         const typedApp = app as Application
-        console.log(`[DEBUG basic-details] resolved application_id: ${typedApp.id}`)
+        const now = new Date().toISOString()
 
-        // Check if details already exist
-        const { data: existing, error: existingError } = await supabaseAdmin
+        // Upsert basic details
+        const { data: existing } = await supabaseAdmin
             .from('application_basic_details')
             .select('id')
             .eq('application_id', typedApp.id)
             .single()
 
-        if (existingError && existingError.code !== 'PGRST116') {
-            console.log('[DEBUG basic-details] Existing details fetch error:', existingError)
-        }
-
-        // We construct the payload including the identity details from the user object 
-        // safely to ensure the database schema receives them if they are still required fields.
         const payload = {
             ...parsed.data,
             application_id: typedApp.id,
-            full_name: user.full_name,
-            email: user.email,
             mobile_number: user.phone,
-            updated_at: new Date().toISOString(),
+            updated_at: now,
         }
 
-        console.log('[DEBUG basic-details] preparing db save payload:', payload)
-
         if (existing?.id) {
-            const { error: updateError } = await supabaseAdmin
+            const { error } = await supabaseAdmin
                 .from('application_basic_details')
                 .update(payload)
                 .eq('id', existing.id)
-
-            if (updateError) {
-                console.error('[Supabase DB Error] basic-details update:', updateError)
-                return errorResponse('Database error during update', 500)
-            }
+            if (error) return errorResponse('Database error', 500)
         } else {
-            const { error: insertError } = await supabaseAdmin
+            const { error } = await supabaseAdmin
                 .from('application_basic_details')
                 .insert(payload)
-
-            if (insertError) {
-                console.error('[Supabase DB Error] basic-details insert:', insertError)
-                return errorResponse('Database error during insert', 500)
-            }
+            if (error) return errorResponse('Database error', 500)
         }
 
-        // Update application step and status
-        const { error: stepUpdateError } = await supabaseAdmin
+        // Update application: mark basic details complete, set next step to application_fee
+        const { error: stepErr } = await supabaseAdmin
             .from('applications')
-            .update({ current_step: 'education_work_details', application_status: 'in_progress', updated_at: new Date().toISOString() })
+            .update({
+                basic_details_status: 'completed',
+                application_status: 'application_fee_pending',
+                current_step: 'application_fee',
+                last_edited_at: now,
+                updated_at: now,
+            })
             .eq('id', typedApp.id)
 
-        if (stepUpdateError) {
-            console.error('[Supabase DB Error] application step update:', stepUpdateError)
-        }
+        if (stepErr) console.error('[basic-details POST] step update error:', stepErr)
 
-        console.log('[DEBUG basic-details] Basic details saved successfully')
         return successResponse({ message: 'Basic details saved successfully' })
-    } catch (err: any) {
-        console.error('[DEBUG basic-details] unhandled server error:', err)
+    } catch (err) {
+        console.error('[basic-details POST] error:', err)
         return errorResponse('Server Error', 500)
     }
 }
