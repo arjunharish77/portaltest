@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import type { DashboardData } from '@/types/application'
+import { useApplicationContext } from '@/components/ApplicationProvider'
 
 const statusColors: Record<string, { label: string; color: string }> = {
     draft: { label: 'Draft', color: '#6b7280' },
@@ -65,10 +66,8 @@ const itemVariants: Variants = {
 
 export default function DashboardPage() {
     const router = useRouter()
-    const [data, setData] = useState<DashboardData | null>(null)
-    const [error, setError] = useState('')
+    const { appState: data, loading, error } = useApplicationContext()
     const [loggingOut, setLoggingOut] = useState(false)
-    const [loading, setLoading] = useState(true)
 
     // Prefetch key routes
     useEffect(() => {
@@ -79,23 +78,10 @@ export default function DashboardPage() {
     }, [router])
 
     useEffect(() => {
-        async function load() {
-            try {
-                const res = await fetch('/api/application/dashboard')
-                const json = await res.json()
-                if (!json.success) {
-                    if (res.status === 401) { router.replace('/login'); return }
-                    setError(json.error ?? 'Failed to load dashboard')
-                } else {
-                    setData(json.data)
-                }
-            } catch {
-                setError('Network error loading dashboard.')
-            } finally {
-                setLoading(false)
-            }
-        }
-        load()
+        router.prefetch('/application/admission-fee')
+        router.prefetch('/application/education-work')
+        router.prefetch('/application/basic-details')
+        router.prefetch('/application/document-upload')
     }, [router])
 
     async function handleLogout() {
@@ -158,7 +144,7 @@ export default function DashboardPage() {
                     className="flex flex-col gap-6"
                 >
                     {/* Welcome card */}
-                    <motion.div variants={itemVariants}>
+                    <motion.div layout variants={itemVariants}>
                         <Card className="shadow-sm border-0 ring-1 ring-black/5">
                             <div className="flex items-start justify-between gap-4">
                                 <div>
@@ -174,7 +160,7 @@ export default function DashboardPage() {
                     </motion.div>
 
                     {/* Application Summary */}
-                    <motion.div variants={itemVariants}>
+                    <motion.div layout variants={itemVariants}>
                         <Card className="shadow-sm border-0 ring-1 ring-black/5">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-base font-semibold text-[var(--text-primary)] tracking-tight">Application Overview</h2>
@@ -203,7 +189,7 @@ export default function DashboardPage() {
                     {/* ── PHASE: Basic Details / App Fee ── */}
                     <AnimatePresence mode="wait">
                         {(nav.phase === 'start' || nav.phase === 'basic_details') && (
-                            <motion.div key="basic-details" variants={itemVariants} exit={{ opacity: 0, y: -10 }}>
+                            <motion.div layout key="basic-details" variants={itemVariants} exit={{ opacity: 0, scale: 0.95, y: -10 }}>
                                 <Card className="shadow-sm border-0 ring-1 ring-brand-primary/20 bg-brand-primary/[0.02]">
                                     <h2 className="text-base font-semibold text-[var(--text-primary)] tracking-tight mb-2">
                                         {nav.phase === 'start' ? 'Start Your Application' : 'Continue Your Application'}
@@ -224,7 +210,7 @@ export default function DashboardPage() {
 
                         {/* ── PHASE: Split Journey ── */}
                         {nav.phase === 'split_journey' && (
-                            <motion.div key="split-journey" variants={itemVariants} className="flex flex-col gap-4">
+                            <motion.div layout key="split-journey" variants={itemVariants} className="flex flex-col gap-4">
                                 <h2 className="text-base font-semibold text-[var(--text-primary)] tracking-tight px-1">
                                     Next Steps
                                 </h2>
@@ -258,7 +244,7 @@ export default function DashboardPage() {
 
                                     {/* Education OR Document Upload Card (Disappears after doc upload is done) */}
                                     {!nav.docDone && (!nav.eduDone ? (
-                                        <motion.div key="edu-card" whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+                                        <motion.div layout key="edu-card" whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
                                             <div className="relative flex flex-col h-full p-5 rounded-2xl border border-[var(--border)] bg-white shadow-sm hover:shadow-md transition-all">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm" style={{ background: 'var(--brand-primary)' }}>
@@ -277,7 +263,7 @@ export default function DashboardPage() {
                                             </div>
                                         </motion.div>
                                     ) : (
-                                        <motion.div key="doc-card" whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+                                        <motion.div layout key="doc-card" whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
                                             <div className="relative flex flex-col h-full p-5 rounded-2xl border border-[var(--border)] bg-white shadow-sm hover:shadow-md transition-all">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm" style={{ background: 'var(--brand-primary)' }}>
@@ -302,7 +288,7 @@ export default function DashboardPage() {
 
                         {/* ── APPROVAL SECTION ── */}
                         {approvalEligible && data.approvals && data.approvals.length > 0 && (
-                            <motion.div key="approvals" variants={itemVariants}>
+                            <motion.div layout key="approvals" variants={itemVariants}>
                                 <Card className="shadow-sm border-0 ring-1 ring-black/5">
                                     <h2 className="text-base font-semibold text-[var(--text-primary)] tracking-tight mb-4">Approval Status</h2>
                                     <div className="flex flex-col gap-3">

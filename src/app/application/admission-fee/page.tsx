@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { ADMISSION_FEE_PLANS, type AdmissionFeePlan } from '@/types/application'
+import { useApplicationContext } from '@/components/ApplicationProvider'
 
 interface Summary {
     full_name: string
@@ -33,8 +34,7 @@ const itemVariants: Variants = {
 
 export default function AdmissionFeePage() {
     const router = useRouter()
-    const [summary, setSummary] = useState<Summary | null>(null)
-    const [loading, setLoading] = useState(true)
+    const { appState, loading, updateAppStateLocally } = useApplicationContext()
     const [selectedPlan, setSelectedPlan] = useState<AdmissionFeePlan | null>(null)
     const [paying, setPaying] = useState(false)
     const [error, setError] = useState('')
@@ -45,39 +45,10 @@ export default function AdmissionFeePage() {
     }, [router])
 
     useEffect(() => {
-        async function load() {
-            try {
-                // Fetch core state from dashboard API
-                const dashRes = await fetch('/api/application/dashboard')
-                if (dashRes.status === 401) { router.replace('/login'); return }
-                const dashJson = await dashRes.json()
-
-                if (!dashJson.success) {
-                    router.replace('/dashboard')
-                    return
-                }
-
-                const u = dashJson.data.user
-                const a = dashJson.data.application
-
-                setSummary({
-                    full_name: u?.full_name ?? '',
-                    email: u?.email ?? '',
-                    phone: u?.phone ?? '',
-                    application_number: a?.application_number ?? null,
-                    applied_course: a?.applied_course || u?.course_name || null,
-                    admission_fee_status: a?.admission_fee_status ?? null,
-                    admission_fee_plan: a?.admission_fee_plan ?? null,
-                    admission_fee_amount: a?.admission_fee_amount ?? null,
-                })
-            } catch {
-                setError('Failed to load application details')
-            } finally {
-                setLoading(false)
-            }
+        if (!loading && !appState) {
+            router.replace('/dashboard')
         }
-        load()
-    }, [router])
+    }, [loading, appState, router])
 
     async function handlePay() {
         if (!selectedPlan) { setError('Please select a payment plan'); return }
@@ -92,8 +63,12 @@ export default function AdmissionFeePage() {
             const json = await res.json()
             if (!json.success) { setError(json.error ?? 'Payment failed'); setPaying(false); return }
 
+            if (json.data?.updated_flags) {
+                updateAppStateLocally(json.data.updated_flags)
+            }
+
             // Immediate optimistic UI push
-            router.push('/dashboard')
+            router.push(json.data?.redirect_to || '/dashboard')
         } catch {
             setError('Network error. Try again.')
             setPaying(false)
@@ -117,7 +92,21 @@ export default function AdmissionFeePage() {
         )
     }
 
-    const alreadyPaid = summary?.admission_fee_status === 'success'
+    const u = appState?.user
+    const a = appState?.application
+
+    const alreadyPaid = a?.admission_fee_status === 'success'
+
+    const summary = {
+        full_name: u?.full_name ?? '',
+        email: u?.email ?? '',
+        phone: u?.phone ?? '',
+        application_number: a?.application_number ?? null,
+        applied_course: a?.applied_course || u?.course_name || null,
+        admission_fee_status: a?.admission_fee_status ?? null,
+        admission_fee_plan: a?.admission_fee_plan ?? null,
+        admission_fee_amount: a?.admission_fee_amount ?? null,
+    }
 
     return (
         <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>

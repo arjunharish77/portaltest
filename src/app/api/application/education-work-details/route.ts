@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
         const { data: details } = await supabaseAdmin
             .from('application_education_work_details')
-            .select('*')
+            .select('highest_qualification, institution_name, specialization, graduation_year, percentage_or_cgpa, is_work_experience, work_experience_years, current_company, current_designation')
             .eq('application_id', app.id)
             .single()
 
@@ -115,7 +115,15 @@ export async function POST(req: NextRequest) {
             console.error('[education-work POST] step update error:', stepErr.message)
         }
 
-        return successResponse({ message: 'Education & work details saved successfully' })
+        return successResponse({
+            message: 'Education & work details saved successfully',
+            redirect_to: '/application/document-upload',
+            updated_flags: {
+                education_details_status: 'completed',
+                application_status: 'document_pending',
+                current_step: 'document_upload'
+            }
+        })
     } catch (err) {
         console.error('[education-work POST] unhandled error:', err)
         return errorResponse('Server Error', 500)

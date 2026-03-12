@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
+import { useApplicationContext } from '@/components/ApplicationProvider'
 
 import type { Variants } from 'framer-motion'
 
@@ -64,6 +65,12 @@ const itemVariants: Variants = {
 
 export default function EducationWorkPage() {
     const router = useRouter()
+
+    // Application Context
+    const { appState, loading: contextLoading, updateAppStateLocally } = useApplicationContext()
+    const app = appState?.application
+    const user = appState?.user
+
     const [meta, setMeta] = useState<PageMeta>({ full_name: '', application_number: null, applied_course: null })
     const [form, setForm] = useState<EduForm>(EMPTY)
     const [errors, setErrors] = useState<Partial<Record<keyof EduForm, string>>>({})
@@ -79,25 +86,15 @@ export default function EducationWorkPage() {
     useEffect(() => {
         async function load() {
             try {
-                // First get the core dashboard state for meta
-                const dashRes = await fetch('/api/application/dashboard')
-                if (dashRes.status === 401) { router.replace('/login'); return }
-                const dashJson = await dashRes.json()
-
-                if (!dashJson.success) {
-                    router.replace('/dashboard')
-                    return
+                if (user) {
+                    setMeta({
+                        full_name: user.full_name ?? '',
+                        application_number: app?.application_number ?? null,
+                        applied_course: app?.applied_course || user.course_name || null
+                    })
                 }
 
-                const u = dashJson.data.user
-                const a = dashJson.data.application
-                setMeta({
-                    full_name: u?.full_name ?? '',
-                    application_number: a?.application_number ?? null,
-                    applied_course: a?.applied_course || u?.course_name || null
-                })
-
-                // Then get just the education details
+                // Get just the education details
                 const res = await fetch('/api/application/education-work-details')
                 const json = await res.json()
 
@@ -121,8 +118,10 @@ export default function EducationWorkPage() {
                 setLoading(false)
             }
         }
-        load()
-    }, [router])
+        if (!contextLoading) {
+            load()
+        }
+    }, [router, user, app, contextLoading])
 
     function update<K extends keyof EduForm>(field: K, value: EduForm[K]) {
         setForm(p => ({ ...p, [field]: value }))
@@ -160,15 +159,19 @@ export default function EducationWorkPage() {
             const json = await res.json()
             if (!json.success) { setServerError(json.error ?? 'Failed to save'); setSaving(false); return }
 
+            if (json.data?.updated_flags) {
+                updateAppStateLocally(json.data.updated_flags)
+            }
+
             // Optimistic navigation
-            router.push('/application/document-upload')
+            router.push(json.data?.redirect_to || '/application/document-upload')
         } catch {
             setServerError('Network error. Try again.')
             setSaving(false)
         }
     }
 
-    if (loading) return (
+    if (loading || contextLoading) return (
         <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
             <header className="border-b px-6 py-4 flex items-center justify-between bg-white bg-opacity-80 backdrop-blur-md sticky top-0 z-10 border-[var(--border)]">
                 <div className="flex items-center gap-2">

@@ -6,10 +6,16 @@ export const metadata: Metadata = {
   description: 'Apply for admission to Manipal Academy of Higher Education (MAHE) programs through the Online Manipal portal.',
 }
 
+import { ApplicationProvider } from '@/components/ApplicationProvider'
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ApplicationProvider>
+          {children}
+        </ApplicationProvider>
+      </body>
     </html>
   )
 }

@@ -87,7 +87,14 @@ export async function POST(req: NextRequest) {
             return errorResponse('Failed to update application', 500)
         }
 
-        return successResponse({ message: 'Documents submitted successfully' })
+        return successResponse({
+            message: 'Documents submitted successfully',
+            redirect_to: '/dashboard',
+            updated_flags: {
+                document_upload_status: 'completed',
+                current_step: 'dashboard_split'
+            }
+        })
     } catch (err) {
         console.error('[document-upload POST] unhandled error:', err)
         return errorResponse('Server Error', 500)

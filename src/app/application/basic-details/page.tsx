@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
-import type { DashboardData } from '@/types/application'
+import { useApplicationContext } from '@/components/ApplicationProvider'
 
 interface BasicForm {
     alternate_email: string
@@ -57,7 +57,7 @@ const itemVariants: Variants = {
 export default function BasicDetailsPage() {
     const router = useRouter()
 
-    const [appState, setAppState] = useState<DashboardData | null>(null)
+    const { appState, loading: contextLoading, updateAppStateLocally } = useApplicationContext()
     const [form, setForm] = useState<BasicForm>(EMPTY)
     const [errors, setErrors] = useState<Partial<BasicForm>>({})
 
@@ -78,17 +78,10 @@ export default function BasicDetailsPage() {
     useEffect(() => {
         async function load() {
             try {
-                // Fetch core state from dashboard API (compact)
-                const dashRes = await fetch('/api/application/dashboard')
-                if (dashRes.status === 401) { router.replace('/login'); return }
-                const dashJson = await dashRes.json()
-
-                if (dashJson.success) {
-                    setAppState(dashJson.data)
-                    const app = dashJson.data.application
-                    if (app?.basic_details_status === 'completed' || app?.application_fee_status === 'success') {
-                        setShowFeeBlock(true)
-                    }
+                // If context is loaded, we can set fee block immediately if applicable
+                const app = appState?.application
+                if (app?.basic_details_status === 'completed' || app?.application_fee_status === 'success') {
+                    setShowFeeBlock(true)
                 }
 
                 // Fetch basic details
@@ -115,8 +108,10 @@ export default function BasicDetailsPage() {
                 setLoading(false)
             }
         }
-        load()
-    }, [router])
+        if (!contextLoading) {
+            load()
+        }
+    }, [router, appState, contextLoading])
 
     function update(field: keyof BasicForm, value: string) {
         setForm(p => ({ ...p, [field]: value }))
@@ -154,13 +149,13 @@ export default function BasicDetailsPage() {
             const json = await res.json()
             if (!json.success) { setServerError(json.error ?? 'Failed to save'); return }
 
+            // Update global context seamlessly
+            if (json.data?.updated_flags) {
+                updateAppStateLocally(json.data.updated_flags)
+            }
+
             setSuccess('Basic details saved.')
             setShowFeeBlock(true)
-
-            // smooth scroll to fee block
-            setTimeout(() => {
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
-            }, 100)
         } catch {
             setServerError('Network error. Try again.')
         } finally {
@@ -181,15 +176,19 @@ export default function BasicDetailsPage() {
                 return
             }
 
+            if (json.data?.updated_flags) {
+                updateAppStateLocally(json.data.updated_flags)
+            }
+
             // Success -> immediately router push without waiting to clear paying state
-            router.push('/dashboard')
+            router.push(json.data?.redirect_to || '/dashboard')
         } catch {
             setServerError('Network error during payment.')
             setPaying(false)
         }
     }
 
-    if (loading) {
+    if (loading || contextLoading) {
         return (
             <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
                 <header className="border-b px-6 py-4 flex items-center justify-between bg-white bg-opacity-80 backdrop-blur-md sticky top-0 z-10 border-[var(--border)]">

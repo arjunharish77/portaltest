@@ -114,7 +114,14 @@ export async function POST(req: NextRequest) {
 
         if (stepErr) console.error('[basic-details POST] step update error:', stepErr)
 
-        return successResponse({ message: 'Basic details saved successfully' })
+        return successResponse({
+            message: 'Basic details saved successfully',
+            updated_flags: {
+                basic_details_status: 'completed',
+                application_status: 'application_fee_pending',
+                current_step: 'application_fee'
+            }
+        })
     } catch (err) {
         console.error('[basic-details POST] error:', err)
         return errorResponse('Server Error', 500)

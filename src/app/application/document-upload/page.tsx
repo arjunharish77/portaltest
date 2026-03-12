@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
+import { useApplicationContext } from '@/components/ApplicationProvider'
 
 import type { Variants } from 'framer-motion'
 
@@ -60,8 +61,12 @@ const itemVariants: Variants = {
 
 export default function DocumentUploadPage() {
     const router = useRouter()
-    const [appNumber, setAppNumber] = useState<string | null>(null)
-    const [userName, setUserName] = useState('')
+
+    // Application Context
+    const { appState, loading: contextLoading, updateAppStateLocally } = useApplicationContext()
+    const appNumber = appState?.application?.application_number ?? null
+    const userName = appState?.user?.full_name ?? ''
+
     const [docEntries, setDocEntries] = useState<Record<string, DocEntry>>({})
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
@@ -76,22 +81,7 @@ export default function DocumentUploadPage() {
     useEffect(() => {
         async function load() {
             try {
-                // First get the core dashboard state for meta
-                const dashRes = await fetch('/api/application/dashboard')
-                if (dashRes.status === 401) { router.replace('/login'); return }
-                const dashJson = await dashRes.json()
-
-                if (!dashJson.success) {
-                    router.replace('/dashboard')
-                    return
-                }
-
-                const u = dashJson.data.user
-                const a = dashJson.data.application
-                setAppNumber(a?.application_number ?? null)
-                setUserName(u?.full_name ?? '')
-
-                // Then get pre-existing documents if any
+                // Get pre-existing documents if any
                 const res = await fetch('/api/application/document-upload')
                 const json = await res.json()
 
@@ -109,8 +99,10 @@ export default function DocumentUploadPage() {
                 setLoading(false)
             }
         }
-        load()
-    }, [router])
+        if (!contextLoading) {
+            load()
+        }
+    }, [contextLoading])
 
     function setDocFileName(docType: string, fileName: string) {
         setDocEntries(p => ({
@@ -141,15 +133,19 @@ export default function DocumentUploadPage() {
             const json = await res.json()
             if (!json.success) { setServerError(json.error ?? 'Failed to submit'); setSubmitting(false); return }
 
+            if (json.data?.updated_flags) {
+                updateAppStateLocally(json.data.updated_flags)
+            }
+
             // Immediate optimistic UI push
-            router.push('/dashboard')
+            router.push(json.data?.redirect_to || '/dashboard')
         } catch {
             setServerError('Network error. Try again.')
             setSubmitting(false)
         }
     }
 
-    if (loading) return (
+    if (loading || contextLoading) return (
         <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
             <header className="border-b px-6 py-4 flex items-center justify-between bg-white bg-opacity-80 backdrop-blur-md sticky top-0 z-10 border-[var(--border)]">
                 <div className="flex items-center gap-2">

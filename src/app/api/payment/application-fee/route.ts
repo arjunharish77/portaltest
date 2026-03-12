@@ -85,6 +85,13 @@ export async function POST(req: NextRequest) {
             message: 'Application fee paid successfully',
             amount: FEE,
             transaction_reference: txRef,
+            redirect_to: '/dashboard',
+            updated_flags: {
+                application_fee_status: 'success',
+                application_fee_amount: FEE,
+                application_status: 'split_journey',
+                current_step: 'dashboard_split'
+            }
         })
     } catch (err) {
         console.error('[payment/application-fee] unhandled error:', err)

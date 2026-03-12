@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         if (approvalEligible) {
             const { data: approvalRows } = await supabaseAdmin
                 .from('application_approval_status')
-                .select('*')
+                .select('id, application_id, level, status, remarks, created_at, updated_at')
                 .eq('application_id', typedApp.id)
                 .order('created_at', { ascending: true })
             approvals = (approvalRows ?? []) as ApplicationApprovalStatus[]
