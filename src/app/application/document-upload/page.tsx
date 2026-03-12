@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { useApplicationContext } from '@/components/ApplicationProvider'
+import { trackTime, logActionFlow } from '@/lib/utils/verification'
 
 import type { Variants } from 'framer-motion'
 
@@ -124,13 +125,19 @@ export default function DocumentUploadPage() {
         // Collect only docs with file names entered
         const documents = Object.values(docEntries).filter(d => d.file_name.trim())
 
+        const start = trackTime()
         try {
+            const bodyStr = JSON.stringify({ documents })
+            const payloadSizeBytes = new Blob([bodyStr]).size
             const res = await fetch('/api/application/document-upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ documents }),
+                body: bodyStr,
             })
             const json = await res.json()
+            const duration = trackTime() - start
+            logActionFlow('Submit Documents', '/api/application/document-upload', duration, json.success ? 'Success' : 'Failed', payloadSizeBytes)
+
             if (!json.success) { setServerError(json.error ?? 'Failed to submit'); setSubmitting(false); return }
 
             if (json.data?.updated_flags) {

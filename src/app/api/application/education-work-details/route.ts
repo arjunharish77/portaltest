@@ -3,11 +3,17 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getAuthUser } from '@/lib/auth/guard'
 import { errorResponse, successResponse } from '@/lib/utils/api-response'
 import { EducationWorkSchema } from '@/lib/validations/application'
+import { trackTime, logDbDebug, logPayloadSize, logVercelSimulation } from '@/lib/utils/verification'
 
 export async function GET(req: NextRequest) {
+    const startTime = trackTime()
     try {
         const { user } = await getAuthUser(req)
 
+        let queries = 0
+        const dbStart = trackTime()
+
+        queries++
         const { data: app } = await supabaseAdmin
             .from('applications')
             .select('id')
@@ -16,21 +22,32 @@ export async function GET(req: NextRequest) {
 
         if (!app) return successResponse({ details: null })
 
+        queries++
         const { data: details } = await supabaseAdmin
             .from('application_education_work_details')
             .select('highest_qualification, institution_name, specialization, graduation_year, percentage_or_cgpa, is_work_experience, work_experience_years, current_company, current_designation')
             .eq('application_id', app.id)
             .single()
 
-        return successResponse({
+        const dbDuration = trackTime() - dbStart
+        logDbDebug('GET /api/application/education-work-details', queries, dbDuration, 'highest_qual, institution, ...')
+
+        const payload = {
             details: details ?? null,
-        })
+        }
+
+        const totalDuration = trackTime() - startTime
+        logPayloadSize('GET /api/application/education-work-details', Buffer.byteLength(JSON.stringify(payload), 'utf8'), totalDuration, 5)
+        logVercelSimulation('GET /api/application/education-work-details', 1)
+
+        return successResponse(payload)
     } catch {
         return errorResponse('Unauthorized', 401)
     }
 }
 
 export async function POST(req: NextRequest) {
+    const startTime = trackTime()
     try {
         const { user } = await getAuthUser(req)
 
@@ -43,6 +60,10 @@ export async function POST(req: NextRequest) {
             })
         }
 
+        let queries = 0
+        const dbStart = trackTime()
+
+        queries++
         const { data: app, error: appErr } = await supabaseAdmin
             .from('applications')
             .select('id')
@@ -74,12 +95,14 @@ export async function POST(req: NextRequest) {
         console.log('[education-work POST] application_id:', app.id, 'payload:', payload)
 
         // Check if a row exists already (unique index on application_id)
+        queries++
         const { data: existing } = await supabaseAdmin
             .from('application_education_work_details')
             .select('id')
             .eq('application_id', app.id)
             .single()
 
+        queries++
         if (existing?.id) {
             const { error: updateErr } = await supabaseAdmin
                 .from('application_education_work_details')
@@ -100,6 +123,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Update applications step
+        queries++
         const { error: stepErr } = await supabaseAdmin
             .from('applications')
             .update({
@@ -115,7 +139,10 @@ export async function POST(req: NextRequest) {
             console.error('[education-work POST] step update error:', stepErr.message)
         }
 
-        return successResponse({
+        const dbDuration = trackTime() - dbStart
+        logDbDebug('POST /api/application/education-work-details', queries, dbDuration, 'upsert full row')
+
+        const responsePayload = {
             message: 'Education & work details saved successfully',
             redirect_to: '/application/document-upload',
             updated_flags: {
@@ -123,7 +150,13 @@ export async function POST(req: NextRequest) {
                 application_status: 'document_pending',
                 current_step: 'document_upload'
             }
-        })
+        }
+
+        const totalDuration = trackTime() - startTime
+        logPayloadSize('POST /api/application/education-work-details', Buffer.byteLength(JSON.stringify(responsePayload), 'utf8'), totalDuration, 5)
+        logVercelSimulation('POST /api/application/education-work-details', 1)
+
+        return successResponse(responsePayload)
     } catch (err) {
         console.error('[education-work POST] unhandled error:', err)
         return errorResponse('Server Error', 500)

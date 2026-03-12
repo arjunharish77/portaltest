@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { useApplicationContext } from '@/components/ApplicationProvider'
+import { trackTime, logActionFlow } from '@/lib/utils/verification'
 
 interface BasicForm {
     alternate_email: string
@@ -140,13 +141,19 @@ export default function BasicDetailsPage() {
         setSaving(true)
         setServerError('')
         setSuccess('')
+        const start = trackTime()
         try {
+            const bodyStr = JSON.stringify(form)
+            const payloadSizeBytes = new Blob([bodyStr]).size
             const res = await fetch('/api/application/basic-details', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form),
+                body: bodyStr,
             })
             const json = await res.json()
+            const duration = trackTime() - start
+            logActionFlow('Save Basic Details', '/api/application/basic-details', duration, json.success ? 'Success' : 'Failed', payloadSizeBytes)
+
             if (!json.success) { setServerError(json.error ?? 'Failed to save'); return }
 
             // Update global context seamlessly
@@ -166,9 +173,12 @@ export default function BasicDetailsPage() {
     async function handlePayFee() {
         setPaying(true)
         setServerError('')
+        const start = trackTime()
         try {
             const res = await fetch('/api/payment/application-fee', { method: 'POST' })
             const json = await res.json()
+            const duration = trackTime() - start
+            logActionFlow('Pay Application Fee', '/api/payment/application-fee', duration, json.success ? 'Success' : 'Failed', 0)
 
             if (!json.success) {
                 setServerError(json.error ?? 'Payment failed')

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import type { DashboardData } from '@/types/application'
+import { trackTime, logFrontendNetworkAudit, validateStateIntegrity } from '@/lib/utils/verification'
 
 interface ApplicationContextValue {
     appState: DashboardData | null
@@ -29,8 +30,16 @@ export function ApplicationProvider({ children }: { children: React.ReactNode })
 
         try {
             setLoading(true)
+            const start = trackTime()
             const res = await fetch('/api/application/dashboard')
-            const json = await res.json()
+            const text = await res.text()
+
+            const duration = trackTime() - start
+            const sizeBytes = new Blob([text]).size
+
+            logFrontendNetworkAudit(pathname, ['/api/application/dashboard'], 1, 'Provider Fetch', sizeBytes, duration)
+
+            const json = JSON.parse(text)
 
             if (!json.success) {
                 if (res.status === 401) {
@@ -39,6 +48,7 @@ export function ApplicationProvider({ children }: { children: React.ReactNode })
                 }
                 setError(json.error ?? 'Failed to load application data')
             } else {
+                validateStateIntegrity(json.data)
                 setAppState(json.data)
                 setError(null)
             }

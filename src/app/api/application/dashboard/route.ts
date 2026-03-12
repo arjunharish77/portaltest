@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getAuthUser } from '@/lib/auth/guard'
 import { errorResponse, successResponse } from '@/lib/utils/api-response'
+import { trackTime, logDbDebug, logPayloadSize, logVercelSimulation } from '@/lib/utils/verification'
 import type { Application, ApplicationApprovalStatus } from '@/types/db'
 
 /** Helper: create approval rows if both conditions met and rows don't exist yet */
@@ -23,9 +24,14 @@ async function maybeCreateApprovals(applicationId: string) {
 }
 
 export async function GET(req: NextRequest) {
+    const startTime = trackTime()
     try {
         const { user } = await getAuthUser(req)
 
+        let queries = 0
+        const dbStart = trackTime()
+
+        queries++
         let { data: app, error: appError } = await supabaseAdmin
             .from('applications')
             .select(`
@@ -39,6 +45,7 @@ export async function GET(req: NextRequest) {
             .single()
 
         if (appError || !app) {
+            queries++
             const now = new Date().toISOString()
             const { data: newApp, error: createError } = await supabaseAdmin
                 .from('applications')
@@ -71,12 +78,14 @@ export async function GET(req: NextRequest) {
             typedApp.document_upload_status === 'completed'
 
         if (approvalEligible) {
+            queries += 2 // approx select + insert
             await maybeCreateApprovals(typedApp.id)
         }
 
         // Fetch approval rows
         let approvals: ApplicationApprovalStatus[] = []
         if (approvalEligible) {
+            queries++
             const { data: approvalRows } = await supabaseAdmin
                 .from('application_approval_status')
                 .select('id, application_id, level, status, remarks, created_at, updated_at')
@@ -85,7 +94,10 @@ export async function GET(req: NextRequest) {
             approvals = (approvalRows ?? []) as ApplicationApprovalStatus[]
         }
 
-        return successResponse({
+        const dbDuration = trackTime() - dbStart
+        logDbDebug('/api/application/dashboard', queries, dbDuration, 'id, application_status, current_step, ...')
+
+        const payload = {
             user: {
                 id: user.id,
                 full_name: user.full_name,
@@ -111,7 +123,14 @@ export async function GET(req: NextRequest) {
                 admission_fee_amount: typedApp.admission_fee_amount,
             },
             approvals,
-        })
+        }
+
+        const totalDuration = trackTime() - startTime
+        const payloadBytes = Buffer.byteLength(JSON.stringify(payload), 'utf8')
+        logPayloadSize('/api/application/dashboard', payloadBytes, totalDuration, 5)
+        logVercelSimulation('/api/application/dashboard', 1)
+
+        return successResponse(payload)
     } catch {
         return errorResponse('Unauthorized', 401)
     }

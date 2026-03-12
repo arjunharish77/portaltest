@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { useApplicationContext } from '@/components/ApplicationProvider'
+import { trackTime, logActionFlow } from '@/lib/utils/verification'
 
 import type { Variants } from 'framer-motion'
 
@@ -150,13 +151,19 @@ export default function EducationWorkPage() {
         if (!validate()) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
         setSaving(true)
         setServerError('')
+        const start = trackTime()
         try {
+            const bodyStr = JSON.stringify(form)
+            const payloadSizeBytes = new Blob([bodyStr]).size
             const res = await fetch('/api/application/education-work-details', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form),
+                body: bodyStr,
             })
             const json = await res.json()
+            const duration = trackTime() - start
+            logActionFlow('Save Education Details', '/api/application/education-work-details', duration, json.success ? 'Success' : 'Failed', payloadSizeBytes)
+
             if (!json.success) { setServerError(json.error ?? 'Failed to save'); setSaving(false); return }
 
             if (json.data?.updated_flags) {
