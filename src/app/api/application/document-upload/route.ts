@@ -9,11 +9,11 @@ export async function GET(req: NextRequest) {
 
         const { data: app } = await supabaseAdmin
             .from('applications')
-            .select('id, application_number, document_upload_status')
+            .select('id')
             .eq('user_id', user.id)
             .single()
 
-        if (!app) return successResponse({ documents: [], application: null })
+        if (!app) return successResponse({ documents: [] })
 
         const { data: documents } = await supabaseAdmin
             .from('application_documents')
@@ -23,11 +23,6 @@ export async function GET(req: NextRequest) {
 
         return successResponse({
             documents: documents ?? [],
-            application: {
-                application_number: app.application_number,
-                document_upload_status: app.document_upload_status,
-            },
-            user: { full_name: user.full_name },
         })
     } catch {
         return errorResponse('Unauthorized', 401)
@@ -81,6 +76,7 @@ export async function POST(req: NextRequest) {
             .from('applications')
             .update({
                 document_upload_status: 'completed',
+                current_step: 'dashboard_split',
                 last_edited_at: now,
                 updated_at: now,
             })

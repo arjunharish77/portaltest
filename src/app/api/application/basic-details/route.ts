@@ -9,9 +9,10 @@ export async function GET(req: NextRequest) {
     try {
         const { user } = await getAuthUser(req)
 
+        // Try to fetch app id just to find details
         const { data: app } = await supabaseAdmin
             .from('applications')
-            .select('id, application_number, current_step, basic_details_status, application_fee_status')
+            .select('id, application_number, custom_user_data:user_id ( full_name, email, phone )')
             .eq('user_id', user.id)
             .single()
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
 
         const { data: details } = await supabaseAdmin
             .from('application_basic_details')
-            .select('*')
+            .select('alternate_email, alternate_mobile_number, gender, date_of_birth, country, state, city, pincode, address_line, nationality')
             .eq('application_id', app.id)
             .single()
 
@@ -31,9 +32,6 @@ export async function GET(req: NextRequest) {
                 phone: user.phone,
                 course_name: user.course_name,
                 application_number: app.application_number,
-                current_step: app.current_step,
-                basic_details_status: app.basic_details_status,
-                application_fee_status: app.application_fee_status,
             }
         })
     } catch {

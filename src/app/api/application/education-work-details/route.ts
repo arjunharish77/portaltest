@@ -10,11 +10,11 @@ export async function GET(req: NextRequest) {
 
         const { data: app } = await supabaseAdmin
             .from('applications')
-            .select('id, application_number, applied_course, education_details_status')
+            .select('id')
             .eq('user_id', user.id)
             .single()
 
-        if (!app) return successResponse({ details: null, user: null })
+        if (!app) return successResponse({ details: null })
 
         const { data: details } = await supabaseAdmin
             .from('application_education_work_details')
@@ -24,14 +24,6 @@ export async function GET(req: NextRequest) {
 
         return successResponse({
             details: details ?? null,
-            user: {
-                full_name: user.full_name,
-                email: user.email,
-                phone: user.phone,
-                course_name: user.course_name,
-                application_number: app.application_number,
-                applied_course: app.applied_course,
-            }
         })
     } catch {
         return errorResponse('Unauthorized', 401)

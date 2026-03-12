@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
                 admission_fee_status: 'success',
                 admission_fee_plan: plan,
                 admission_fee_amount: amount,
+                current_step: 'dashboard_split',
                 last_edited_at: now,
                 updated_at: now,
             })
