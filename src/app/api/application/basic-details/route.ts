@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
         const payload = {
             ...parsed.data,
             application_id: typedApp.id,
+            full_name: user.full_name,
+            email: user.email,
             mobile_number: user.phone,
             updated_at: now,
         }
@@ -84,12 +86,18 @@ export async function POST(req: NextRequest) {
                 .from('application_basic_details')
                 .update(payload)
                 .eq('id', existing.id)
-            if (error) return errorResponse('Database error', 500)
+            if (error) {
+                console.error('[Supabase DB Error] update basic details:', error)
+                return errorResponse(`Database error: ${error.message}`, 500)
+            }
         } else {
             const { error } = await supabaseAdmin
                 .from('application_basic_details')
                 .insert(payload)
-            if (error) return errorResponse('Database error', 500)
+            if (error) {
+                console.error('[Supabase DB Error] insert basic details:', error)
+                return errorResponse(`Database error: ${error.message}`, 500)
+            }
         }
 
         // Update application: mark basic details complete, set next step to application_fee
